@@ -52,6 +52,10 @@ extern "C" {
  */
 #define MAX_PASSWORD_SIZE					64
 
+/**
+ * @brief Defines the maximum size of the username. 256 is IEEE standard.
+ */
+#define MAX_USER_SIZE					256
 
 /**
  * @brief Defines the maximum number of access points that can be scanned.
@@ -157,7 +161,7 @@ extern "C" {
  *  Value: WIFI_PS_MODEM for power save (wifi modem sleep periodically)
  *  Note: Power save is only effective when in STA only mode
  */
-#define DEFAULT_STA_POWER_SAVE 				WIFI_PS_NONE
+#define DEFAULT_STA_POWER_SAVE 				WIFI_PS_MIN_MODEM	//WIFI_PS_NONE
 
 /**
  * @brief Defines the maximum length in bytes of a JSON representation of an access point.

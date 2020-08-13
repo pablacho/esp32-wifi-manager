@@ -182,8 +182,10 @@ async function performConnect(conntype) {
     //Grab the manual SSID and PWD
     selectedSSID = gel("manual_ssid").value;
     pwd = gel("manual_pwd").value;
+    usr = gel("manual_usr").value;
   } else {
     pwd = gel("pwd").value;
+    usr = gel("usr").value;
   }
   //reset connection
   gel("loading").style.display = "block";
@@ -202,6 +204,7 @@ async function performConnect(conntype) {
       "Content-Type": "application/json",
       "X-Custom-ssid": selectedSSID,
       "X-Custom-pwd": pwd,
+      "X-Custom-usr": usr,
     },
     body: { timestamp: Date.now() },
   });
@@ -271,6 +274,7 @@ async function checkStatus(url = "status.json") {
             gel("ip").textContent = data["ip"];
             gel("netmask").textContent = data["netmask"];
             gel("gw").textContent = data["gw"];
+            gel("regusr").textContent = data["regusr"];
             gel("wifi-status").style.display = "block";
 
             //unlock the wait screen if needed
@@ -291,6 +295,7 @@ async function checkStatus(url = "status.json") {
             gel("ip").textContent = "0.0.0.0";
             gel("netmask").textContent = "0.0.0.0";
             gel("gw").textContent = "0.0.0.0";
+            gel("regusr").textContent = "Not found";
 
             //don't show any connection
             gel("wifi-status").display = "none";
@@ -318,6 +323,7 @@ async function checkStatus(url = "status.json") {
           gel("ip").textContent = data["ip"];
           gel("netmask").textContent = data["netmask"];
           gel("gw").textContent = data["gw"];
+          gel("regusr").textContent = data["regusr"];
           gel("wifi-status").style.display = "block";
         }
       }

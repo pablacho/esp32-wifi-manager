@@ -80,6 +80,7 @@ wifi_ap_record_t *accessp_records;
 char *accessp_json = NULL;
 char *ip_info_json = NULL;
 wifi_config_t* wifi_manager_config_sta = NULL;
+char *registered_user = NULL;
 
 /* @brief Array of callback function pointers */
 void (**cb_ptr_arr)(void*) = NULL;
@@ -177,8 +178,8 @@ void wifi_manager_start(){
 	/* disable the default wifi logging */
 	esp_log_level_set("wifi", ESP_LOG_NONE);
 
-	/* initialize flash memory */
-	nvs_flash_init();
+	// /* initialize flash memory */
+	// nvs_flash_init();		// started already on main.c
 
 	/* memory allocation */
 	wifi_manager_queue = xQueueCreate( 3, sizeof( queue_message) );
@@ -199,6 +200,7 @@ void wifi_manager_start(){
 	wifi_manager_sta_ip = (char*)malloc(sizeof(char) * IP4ADDR_STRLEN_MAX);
 	wifi_manager_safe_update_sta_ip_string((uint32_t)0);
 	wifi_manager_event_group = xEventGroupCreate();
+	registered_user = (char*)malloc(MAX_USER_SIZE);
 
 	/* create timer for to keep track of retries */
 	wifi_manager_retry_timer = xTimerCreate( NULL, pdMS_TO_TICKS(WIFI_MANAGER_RETRY_TIMER), pdFALSE, ( void * ) 0, wifi_manager_timer_retry_cb);
@@ -219,8 +221,10 @@ esp_err_t wifi_manager_save_sta_config(){
 	/* variables used to check if write is really needed */
 	wifi_config_t tmp_conf;
 	struct wifi_settings_t tmp_settings;
+	char tmp_user[MAX_USER_SIZE];
 	memset(&tmp_conf, 0x00, sizeof(tmp_conf));
 	memset(&tmp_settings, 0x00, sizeof(tmp_settings));
+	memset(&tmp_user, 0x00, sizeof(tmp_user));
 	bool change = false;
 
 	ESP_LOGI(TAG, "About to save config to flash");
@@ -234,7 +238,7 @@ esp_err_t wifi_manager_save_sta_config(){
 		esp_err = nvs_get_blob(handle, "ssid", tmp_conf.sta.ssid, &sz);
 		if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp( (char*)tmp_conf.sta.ssid, (char*)wifi_manager_config_sta->sta.ssid) != 0){
 			/* different ssid or ssid does not exist in flash: save new ssid */
-			esp_err = nvs_set_blob(handle, "ssid", wifi_manager_config_sta->sta.ssid, 32);
+			esp_err = nvs_set_blob(handle, "ssid", wifi_manager_config_sta->sta.ssid, MAX_SSID_SIZE);
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 			ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: ssid:%s",wifi_manager_config_sta->sta.ssid);
@@ -245,10 +249,22 @@ esp_err_t wifi_manager_save_sta_config(){
 		esp_err = nvs_get_blob(handle, "password", tmp_conf.sta.password, &sz);
 		if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp( (char*)tmp_conf.sta.password, (char*)wifi_manager_config_sta->sta.password) != 0){
 			/* different password or password does not exist in flash: save new password */
-			esp_err = nvs_set_blob(handle, "password", wifi_manager_config_sta->sta.password, 64);
+			esp_err = nvs_set_blob(handle, "password", wifi_manager_config_sta->sta.password, MAX_PASSWORD_SIZE);
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 			ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: password:%s",wifi_manager_config_sta->sta.password);
+		}
+
+		if (registered_user) {
+			sz = sizeof(tmp_user);
+			esp_err = nvs_get_blob(handle, "user", tmp_user, &sz);
+			if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp( (char*)tmp_user, (char*)registered_user) != 0){
+				/* different user or user does not exist in flash: save new user */
+				esp_err = nvs_set_blob(handle, "user", registered_user, MAX_USER_SIZE);
+				if (esp_err != ESP_OK) return esp_err;
+				change = true;
+				ESP_LOGI(TAG, "wifi_manager_wrote esphub_config: user:%s", registered_user);
+			}
 		}
 
 		sz = sizeof(tmp_settings);
@@ -268,13 +284,13 @@ esp_err_t wifi_manager_save_sta_config(){
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: SoftAP_ssid: %s",wifi_settings.ap_ssid);
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: SoftAP_pwd: %s",wifi_settings.ap_pwd);
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: SoftAP_channel: %i",wifi_settings.ap_channel);
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: SoftAP_hidden (1 = yes): %i",wifi_settings.ap_ssid_hidden);
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: SoftAP_bandwidth (1 = 20MHz, 2 = 40MHz): %i",wifi_settings.ap_bandwidth);
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: sta_only (0 = APSTA, 1 = STA when connected): %i",wifi_settings.sta_only);
-			ESP_LOGD(TAG, "wifi_manager_wrote wifi_settings: sta_power_save (1 = yes): %i",wifi_settings.sta_power_save);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: SoftAP_ssid: %s",wifi_settings.ap_ssid);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: SoftAP_pwd: %s",wifi_settings.ap_pwd);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: SoftAP_channel: %i",wifi_settings.ap_channel);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: SoftAP_hidden (1 = yes): %i",wifi_settings.ap_ssid_hidden);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: SoftAP_bandwidth (1 = 20MHz, 2 = 40MHz): %i",wifi_settings.ap_bandwidth);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: sta_only (0 = APSTA, 1 = STA when connected): %i",wifi_settings.sta_only);
+			ESP_LOGI(TAG, "wifi_manager_wrote wifi_settings: sta_power_save (1 = yes): %i",wifi_settings.sta_power_save);
 		}
 
 		if(change){
@@ -287,9 +303,6 @@ esp_err_t wifi_manager_save_sta_config(){
 		if (esp_err != ESP_OK) return esp_err;
 
 		nvs_close(handle);
-
-
-
 
 	}
 
@@ -329,6 +342,15 @@ bool wifi_manager_fetch_wifi_sta_config(){
 			return false;
 		}
 		memcpy(wifi_manager_config_sta->sta.password, buff, sz);
+
+		/* user */
+		sz = sizeof(registered_user);
+		esp_err = nvs_get_blob(handle, "user", buff, &sz);
+		if(esp_err != ESP_OK){
+			free(buff);
+			return false;
+		}
+		memcpy(registered_user, buff, sz);		// OJO con el tamaño de buff!
 
 		/* settings */
 		sz = sizeof(wifi_settings);
@@ -1131,6 +1153,9 @@ void wifi_manager( void * pvParameters ){
 					/* erase configuration */
 					if(wifi_manager_config_sta){
 						memset(wifi_manager_config_sta, 0x00, sizeof(wifi_config_t));
+					}
+					if (registered_user) {
+						memset(registered_user, 0x00, MAX_USER_SIZE);
 					}
 
 					/* regenerate json status */
