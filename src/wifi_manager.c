@@ -242,7 +242,6 @@ esp_err_t wifi_manager_save_sta_config(){
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 			ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: ssid:%s",wifi_manager_config_sta->sta.ssid);
-
 		}
 
 		sz = sizeof(tmp_conf.sta.password);
@@ -321,9 +320,11 @@ bool wifi_manager_fetch_wifi_sta_config(){
 		memset(wifi_manager_config_sta, 0x00, sizeof(wifi_config_t));
 
 		/* allocate buffer */
+		// size_t usz = sizeof(registered_user);
 		size_t sz = sizeof(wifi_settings);
-		uint8_t *buff = (uint8_t*)malloc(sizeof(uint8_t) * sz);
-		memset(buff, 0x00, sizeof(sz));
+		uint8_t *buff = (uint8_t*)malloc(sizeof(uint8_t) * MAX_USER_SIZE);
+		// memset(buff, 0x00, sizeof(sz));
+		memset(buff, 0x00, MAX_USER_SIZE);
 
 		/* ssid */
 		sz = sizeof(wifi_manager_config_sta->sta.ssid);
@@ -332,7 +333,9 @@ bool wifi_manager_fetch_wifi_sta_config(){
 			free(buff);
 			return false;
 		}
+		ESP_LOGI(TAG, "Found ssid");
 		memcpy(wifi_manager_config_sta->sta.ssid, buff, sz);
+		memset(buff, 0x00, MAX_USER_SIZE);
 
 		/* password */
 		sz = sizeof(wifi_manager_config_sta->sta.password);
@@ -341,16 +344,22 @@ bool wifi_manager_fetch_wifi_sta_config(){
 			free(buff);
 			return false;
 		}
+		ESP_LOGI(TAG, "Found pwd");
 		memcpy(wifi_manager_config_sta->sta.password, buff, sz);
+		memset(buff, 0x00, MAX_USER_SIZE);
 
 		/* user */
-		sz = sizeof(registered_user);
+		// sz = sizeof(registered_user);
+		sz = MAX_USER_SIZE;
 		esp_err = nvs_get_blob(handle, "user", buff, &sz);
 		if(esp_err != ESP_OK){
+			ESP_LOGI(TAG, "esp_err: %x",esp_err);
 			free(buff);
 			return false;
 		}
-		memcpy(registered_user, buff, sz);		// OJO con el tamaño de buff!
+		ESP_LOGI(TAG, "Found user");
+		memcpy(registered_user, buff, sz);
+		memset(buff, 0x00, MAX_USER_SIZE);
 
 		/* settings */
 		sz = sizeof(wifi_settings);
@@ -364,8 +373,7 @@ bool wifi_manager_fetch_wifi_sta_config(){
 		free(buff);
 		nvs_close(handle);
 
-
-		ESP_LOGI(TAG, "wifi_manager_fetch_wifi_sta_config: ssid:%s password:%s",wifi_manager_config_sta->sta.ssid,wifi_manager_config_sta->sta.password);
+		ESP_LOGI(TAG, "wifi_manager_fetch_wifi_sta_config: ssid:%s password:%s, user:%s",wifi_manager_config_sta->sta.ssid,wifi_manager_config_sta->sta.password, registered_user);
 		ESP_LOGD(TAG, "wifi_manager_fetch_wifi_settings: SoftAP_ssid:%s",wifi_settings.ap_ssid);
 		ESP_LOGD(TAG, "wifi_manager_fetch_wifi_settings: SoftAP_pwd:%s",wifi_settings.ap_pwd);
 		ESP_LOGD(TAG, "wifi_manager_fetch_wifi_settings: SoftAP_channel:%i",wifi_settings.ap_channel);
@@ -376,7 +384,6 @@ bool wifi_manager_fetch_wifi_sta_config(){
 		ESP_LOGD(TAG, "wifi_manager_fetch_wifi_settings: sta_static_ip (0 = dhcp client, 1 = static ip):%i",wifi_settings.sta_static_ip);
 
 		return wifi_manager_config_sta->sta.ssid[0] != '\0';
-
 
 	}
 	else{
@@ -396,7 +403,7 @@ void wifi_manager_generate_ip_info_json(update_reason_code_t update_reason_code)
 	wifi_config_t *config = wifi_manager_get_wifi_sta_config();
 	if(config){
 
-		const char *ip_info_json_format = ",\"ip\":\"%s\",\"netmask\":\"%s\",\"gw\":\"%s\",\"urc\":%d}\n";
+		const char *ip_info_json_format = ",\"ip\":\"%s\",\"netmask\":\"%s\",\"gw\":\"%s\",\"urc\":%d,\"regusr\":\"%s\"}\n";
 
 		memset(ip_info_json, 0x00, JSON_IP_INFO_SIZE);
 
@@ -419,12 +426,12 @@ void wifi_manager_generate_ip_info_json(update_reason_code_t update_reason_code)
 			esp_ip4addr_ntoa(&ip_info.gw, gw, IP4ADDR_STRLEN_MAX);
 			esp_ip4addr_ntoa(&ip_info.netmask, netmask, IP4ADDR_STRLEN_MAX);
 
-
 			snprintf( (ip_info_json + ip_info_json_len), remaining, ip_info_json_format,
 					ip,
 					netmask,
 					gw,
-					(int)update_reason_code);
+					(int)update_reason_code,
+					registered_user);
 		}
 		else{
 			/* notify in the json output the reason code why this was updated without a connection */
@@ -752,6 +759,9 @@ wifi_config_t* wifi_manager_get_wifi_sta_config(){
 	return wifi_manager_config_sta;
 }
 
+char* wifi_manager_get_usr_config(){
+	return registered_user;
+}
 
 void wifi_manager_connect_async(){
 	/* in order to avoid a false positive on the front end app we need to quickly flush the ip json

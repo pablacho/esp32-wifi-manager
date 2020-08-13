@@ -148,7 +148,6 @@ static esp_err_t http_server_post_handler(httpd_req_t *req){
 	/* POST /connect.json */
 	if(strcmp(req->uri, http_connect_url) == 0){
 
-
 		/* buffers for the headers */
 		size_t ssid_len = 0, password_len = 0, user_len = 0;
 		char *ssid = NULL, *password = NULL, *user = NULL;
@@ -157,7 +156,6 @@ static esp_err_t http_server_post_handler(httpd_req_t *req){
 		ssid_len = httpd_req_get_hdr_value_len(req, "X-Custom-ssid");
 		password_len = httpd_req_get_hdr_value_len(req, "X-Custom-pwd");
 		user_len = httpd_req_get_hdr_value_len(req, "X-Custom-usr");
-
 
 		if(	ssid_len && ssid_len <= MAX_SSID_SIZE && \
 			password_len && password_len <= MAX_PASSWORD_SIZE && \
@@ -172,9 +170,12 @@ static esp_err_t http_server_post_handler(httpd_req_t *req){
 			httpd_req_get_hdr_value_str(req, "X-Custom-usr", user, user_len+1);
 
 			wifi_config_t* config = wifi_manager_get_wifi_sta_config();
+			char* rgusr = wifi_manager_get_usr_config();
 			memset(config, 0x00, sizeof(wifi_config_t));
+			memset(rgusr, 0x00, MAX_USER_SIZE);
 			memcpy(config->sta.ssid, ssid, ssid_len);
 			memcpy(config->sta.password, password, password_len);
+			memcpy(rgusr, user, user_len);
 
 			ESP_LOGI(TAG, "ssid: %s, password: %s, user: %s", ssid, password, user);
 			ESP_LOGD(TAG, "http_server_post_handler: wifi_manager_connect_async() call");

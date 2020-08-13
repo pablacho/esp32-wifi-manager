@@ -322,6 +322,7 @@ esp_err_t wifi_manager_save_sta_config();
 bool wifi_manager_fetch_wifi_sta_config();
 
 wifi_config_t* wifi_manager_get_wifi_sta_config();
+char* wifi_manager_get_usr_config();
 
 
 /**
