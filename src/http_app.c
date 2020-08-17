@@ -241,7 +241,6 @@ static esp_err_t http_server_get_handler(httpd_req_t *req){
 	bool access_from_sta_ip = host != NULL?strstr(host, wifi_manager_get_sta_ip_string()):false;
 	wifi_manager_unlock_sta_ip_string();
 
-
 	if (host != NULL && !strstr(host, DEFAULT_AP_IP) && !access_from_sta_ip) {
 
 		/* Captive Portal functionality */
@@ -364,11 +363,9 @@ static const httpd_uri_t http_server_delete_request = {
 	.handler = http_server_delete_handler
 };
 
-
 void http_app_stop(){
 
 	if(httpd_handle != NULL){
-
 
 		/* dealloc URLs */
 		if(http_root_url) {
@@ -485,5 +482,4 @@ void http_app_start(bool lru_purge_enable){
 	        httpd_register_uri_handler(httpd_handle, &http_server_delete_request);
 	    }
 	}
-
 }

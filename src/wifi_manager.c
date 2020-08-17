@@ -483,8 +483,6 @@ void wifi_manager_generate_acess_points_json(){
 
 }
 
-
-
 bool wifi_manager_lock_sta_ip_string(TickType_t xTicksToWait){
 	if(wifi_manager_sta_ip_mutex){
 		if( xSemaphoreTake( wifi_manager_sta_ip_mutex, xTicksToWait ) == pdTRUE ) {
@@ -530,7 +528,6 @@ char* wifi_manager_get_sta_ip_string(){
 	return wifi_manager_sta_ip;
 }
 
-
 bool wifi_manager_lock_json_buffer(TickType_t xTicksToWait){
 	if(wifi_manager_json_mutex){
 		if( xSemaphoreTake( wifi_manager_json_mutex, xTicksToWait ) == pdTRUE ) {
@@ -553,12 +550,10 @@ char* wifi_manager_get_ap_list_json(){
 	return accessp_json;
 }
 
-
 /**
  * @brief Standard wifi event handler
  */
 static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
-
 
 	if (event_base == WIFI_EVENT){
 
@@ -754,7 +749,6 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 
 }
 
-
 wifi_config_t* wifi_manager_get_wifi_sta_config(){
 	return wifi_manager_config_sta;
 }
@@ -775,11 +769,9 @@ void wifi_manager_connect_async(){
 	wifi_manager_send_message(WM_ORDER_CONNECT_STA, (void*)CONNECTION_REQUEST_USER);
 }
 
-
 char* wifi_manager_get_ip_info_json(){
 	return ip_info_json;
 }
-
 
 void wifi_manager_destroy(){
 
@@ -810,9 +802,7 @@ void wifi_manager_destroy(){
 	vQueueDelete(wifi_manager_queue);
 	wifi_manager_queue = NULL;
 
-
 }
-
 
 void wifi_manager_filter_unique( wifi_ap_record_t * aplist, uint16_t * aps) {
 	int total_unique;
@@ -865,7 +855,6 @@ void wifi_manager_filter_unique( wifi_ap_record_t * aplist, uint16_t * aps) {
 	*aps = total_unique;
 }
 
-
 BaseType_t wifi_manager_send_message_to_front(message_code_t code, void *param){
 	queue_message msg;
 	msg.code = code;
@@ -879,7 +868,6 @@ BaseType_t wifi_manager_send_message(message_code_t code, void *param){
 	msg.param = param;
 	return xQueueSend( wifi_manager_queue, &msg, portMAX_DELAY);
 }
-
 
 void wifi_manager_set_callback(message_code_t message_code, void (*func_ptr)(void*) ){
 
@@ -898,12 +886,10 @@ esp_netif_t* wifi_manager_get_esp_netif_sta(){
 
 void wifi_manager( void * pvParameters ){
 
-
 	queue_message msg;
 	BaseType_t xStatus;
 	EventBits_t uxBits;
 	uint8_t	retries = 0;
-
 
 	/* initialize the tcp stack */
 	ESP_ERROR_CHECK(esp_netif_init());
@@ -913,7 +899,6 @@ void wifi_manager( void * pvParameters ){
 
 	esp_netif_sta = esp_netif_create_default_wifi_sta();
 	esp_netif_ap = esp_netif_create_default_wifi_ap();
-
 
 	/* default wifi config */
 	wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
@@ -925,7 +910,6 @@ void wifi_manager( void * pvParameters ){
     esp_event_handler_instance_t instance_ip_event;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_manager_event_handler, NULL,&instance_wifi_event));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &wifi_manager_event_handler, NULL,&instance_ip_event));
-
 
 	/* SoftAP - Wifi Access Point configuration setup */
 	wifi_config_t ap_config = {
@@ -949,7 +933,6 @@ void wifi_manager( void * pvParameters ){
 		memcpy(ap_config.ap.password, wifi_settings.ap_pwd, sizeof(wifi_settings.ap_pwd));
 	}
 	
-
 	/* DHCP AP configuration */
 	esp_netif_dhcps_stop(esp_netif_ap); /* DHCP client/server must be stopped before setting new IP information. */
 	esp_netif_ip_info_t ap_ip_info;
@@ -964,7 +947,6 @@ void wifi_manager( void * pvParameters ){
 	ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
 	ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, wifi_settings.ap_bandwidth));
 	ESP_ERROR_CHECK(esp_wifi_set_ps(wifi_settings.sta_power_save));
-
 
 	/* by default the mode is STA because wifi_manager will not start the access point unless it has to! */
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -983,7 +965,6 @@ void wifi_manager( void * pvParameters ){
 
 	/* enqueue first event: load previous config */
 	wifi_manager_send_message(WM_ORDER_LOAD_AND_RESTORE_STA, NULL);
-
 
 	/* main processing loop */
 	for(;;){
