@@ -38,7 +38,7 @@ Contains the freeRTOS task and all necessary support
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
-#include <freertos/event_groups.h>
+#include "freertos/event_groups.h"
 #include <freertos/timers.h>
 #include <http_app.h>
 #include "esp_wifi.h"
@@ -46,7 +46,7 @@ Contains the freeRTOS task and all necessary support
 #include "esp_netif.h"
 #include "esp_wifi_types.h"
 #include "esp_log.h"
-#include "nvs.h"
+// #include "nvs.h"
 #include "nvs_flash.h"
 #include "mdns.h"
 #include "lwip/api.h"
@@ -113,35 +113,11 @@ struct wifi_settings_t wifi_settings = {
 
 const char wifi_manager_nvs_namespace[] = "espwifimgr";
 
-static EventGroupHandle_t wifi_manager_event_group;
+EventGroupHandle_t dighub_event_group;
 
-/* @brief indicate that the ESP32 is currently connected. */
-const int WIFI_MANAGER_WIFI_CONNECTED_BIT = BIT0;
+bool dighub_event_group_init = false;
 
-const int WIFI_MANAGER_AP_STA_CONNECTED_BIT = BIT1;
-
-/* @brief Set automatically once the SoftAP is started */
-const int WIFI_MANAGER_AP_STARTED_BIT = BIT2;
-
-/* @brief When set, means a client requested to connect to an access point.*/
-const int WIFI_MANAGER_REQUEST_STA_CONNECT_BIT = BIT3;
-
-/* @brief This bit is set automatically as soon as a connection was lost */
-const int WIFI_MANAGER_STA_DISCONNECT_BIT = BIT4;
-
-/* @brief When set, means the wifi manager attempts to restore a previously saved connection at startup. */
-const int WIFI_MANAGER_REQUEST_RESTORE_STA_BIT = BIT5;
-
-/* @brief When set, means a client requested to disconnect from currently connected AP. */
-const int WIFI_MANAGER_REQUEST_WIFI_DISCONNECT_BIT = BIT6;
-
-/* @brief When set, means a scan is in progress */
-const int WIFI_MANAGER_SCAN_BIT = BIT7;
-
-/* @brief When set, means user requested for a disconnect */
-const int WIFI_MANAGER_REQUEST_DISCONNECT_BIT = BIT8;
-
-
+nvs_handle my_nvs_handle;
 
 void wifi_manager_timer_retry_cb( TimerHandle_t xTimer ){
 
@@ -172,14 +148,10 @@ void wifi_manager_disconnect_async(){
 	wifi_manager_send_message(WM_ORDER_DISCONNECT_STA, NULL);
 }
 
-
 void wifi_manager_start(){
 
 	/* disable the default wifi logging */
 	esp_log_level_set("wifi", ESP_LOG_NONE);
-
-	// /* initialize flash memory */
-	// nvs_flash_init();		// started already on main.c
 
 	/* memory allocation */
 	wifi_manager_queue = xQueueCreate( 3, sizeof( queue_message) );
@@ -199,7 +171,15 @@ void wifi_manager_start(){
 	wifi_manager_sta_ip_mutex = xSemaphoreCreateMutex();
 	wifi_manager_sta_ip = (char*)malloc(sizeof(char) * IP4ADDR_STRLEN_MAX);
 	wifi_manager_safe_update_sta_ip_string((uint32_t)0);
-	wifi_manager_event_group = xEventGroupCreate();
+
+    if (!dighub_event_group_init)
+    {
+        // being here means wifi_manager is the first task called
+        // so we create the event group to handle events
+        dighub_event_group = xEventGroupCreate();
+        dighub_event_group_init = true; // just once
+    }
+
 	registered_user = (char*)malloc(MAX_USER_SIZE);
 
 	/* create timer for to keep track of retries */
@@ -214,7 +194,7 @@ void wifi_manager_start(){
 
 esp_err_t wifi_manager_save_sta_config(){
 
-	nvs_handle handle;
+	// nvs_handle handle;
 	esp_err_t esp_err;
 	size_t sz;
 
@@ -231,24 +211,24 @@ esp_err_t wifi_manager_save_sta_config(){
 
 	if(wifi_manager_config_sta){
 
-		esp_err = nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &handle);
+		esp_err = nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &my_nvs_handle);
 		if (esp_err != ESP_OK) return esp_err;
 
 		sz = sizeof(tmp_conf.sta.ssid);
-		esp_err = nvs_get_blob(handle, "ssid", tmp_conf.sta.ssid, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "ssid", tmp_conf.sta.ssid, &sz);
 		if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp( (char*)tmp_conf.sta.ssid, (char*)wifi_manager_config_sta->sta.ssid) != 0){
 			/* different ssid or ssid does not exist in flash: save new ssid */
-			esp_err = nvs_set_blob(handle, "ssid", wifi_manager_config_sta->sta.ssid, MAX_SSID_SIZE);
+			esp_err = nvs_set_blob(my_nvs_handle, "ssid", wifi_manager_config_sta->sta.ssid, MAX_SSID_SIZE);
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 			ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: ssid:%s",wifi_manager_config_sta->sta.ssid);
 		}
 
 		sz = sizeof(tmp_conf.sta.password);
-		esp_err = nvs_get_blob(handle, "password", tmp_conf.sta.password, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "password", tmp_conf.sta.password, &sz);
 		if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp( (char*)tmp_conf.sta.password, (char*)wifi_manager_config_sta->sta.password) != 0){
 			/* different password or password does not exist in flash: save new password */
-			esp_err = nvs_set_blob(handle, "password", wifi_manager_config_sta->sta.password, MAX_PASSWORD_SIZE);
+			esp_err = nvs_set_blob(my_nvs_handle, "password", wifi_manager_config_sta->sta.password, MAX_PASSWORD_SIZE);
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 			ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: password:%s",wifi_manager_config_sta->sta.password);
@@ -256,10 +236,10 @@ esp_err_t wifi_manager_save_sta_config(){
 
 		if (registered_user) {
 			sz = sizeof(tmp_user);
-			esp_err = nvs_get_blob(handle, "user", tmp_user, &sz);
+			esp_err = nvs_get_blob(my_nvs_handle, "user", tmp_user, &sz);
 			if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp( (char*)tmp_user, (char*)registered_user) != 0){
 				/* different user or user does not exist in flash: save new user */
-				esp_err = nvs_set_blob(handle, "user", registered_user, MAX_USER_SIZE);
+				esp_err = nvs_set_blob(my_nvs_handle, "user", registered_user, MAX_USER_SIZE);
 				if (esp_err != ESP_OK) return esp_err;
 				change = true;
 				ESP_LOGI(TAG, "wifi_manager_wrote esphub_config: user:%s", registered_user);
@@ -267,7 +247,7 @@ esp_err_t wifi_manager_save_sta_config(){
 		}
 
 		sz = sizeof(tmp_settings);
-		esp_err = nvs_get_blob(handle, "settings", &tmp_settings, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "settings", &tmp_settings, &sz);
 		if( (esp_err == ESP_OK  || esp_err == ESP_ERR_NVS_NOT_FOUND) &&
 				(
 				strcmp( (char*)tmp_settings.ap_ssid, (char*)wifi_settings.ap_ssid) != 0 ||
@@ -279,7 +259,7 @@ esp_err_t wifi_manager_save_sta_config(){
 				tmp_settings.ap_channel != wifi_settings.ap_channel
 				)
 		){
-			esp_err = nvs_set_blob(handle, "settings", &wifi_settings, sizeof(wifi_settings));
+			esp_err = nvs_set_blob(my_nvs_handle, "settings", &wifi_settings, sizeof(wifi_settings));
 			if (esp_err != ESP_OK) return esp_err;
 			change = true;
 
@@ -293,7 +273,7 @@ esp_err_t wifi_manager_save_sta_config(){
 		}
 
 		if(change){
-			esp_err = nvs_commit(handle);
+			esp_err = nvs_commit(my_nvs_handle);
 		}
 		else{
 			ESP_LOGI(TAG, "Wifi config was not saved to flash because no change has been detected.");
@@ -301,7 +281,7 @@ esp_err_t wifi_manager_save_sta_config(){
 
 		if (esp_err != ESP_OK) return esp_err;
 
-		nvs_close(handle);
+		nvs_close(my_nvs_handle);
 
 	}
 
@@ -310,9 +290,18 @@ esp_err_t wifi_manager_save_sta_config(){
 
 bool wifi_manager_fetch_wifi_sta_config(){
 
-	nvs_handle handle;
+#ifdef PREFACTORY
+	uint8_t prefactory_ssid[] = PREFACTORY_SSID;
+	uint8_t prefactory_pwd[] = PREFACTORY_PWD;
+	memcpy(wifi_manager_config_sta->sta.ssid, prefactory_ssid, sizeof(prefactory_ssid));
+	memcpy(wifi_manager_config_sta->sta.password, prefactory_pwd, sizeof(prefactory_pwd));
+
+	return wifi_manager_config_sta->sta.ssid[0] != '\0';
+
+#else
+	// nvs_handle my_nvs_handle;
 	esp_err_t esp_err;
-	if(nvs_open(wifi_manager_nvs_namespace, NVS_READONLY, &handle) == ESP_OK){
+	if(nvs_open(wifi_manager_nvs_namespace, NVS_READONLY, &my_nvs_handle) == ESP_OK){
 
 		if(wifi_manager_config_sta == NULL){
 			wifi_manager_config_sta = (wifi_config_t*)malloc(sizeof(wifi_config_t));
@@ -328,7 +317,7 @@ bool wifi_manager_fetch_wifi_sta_config(){
 
 		/* ssid */
 		sz = sizeof(wifi_manager_config_sta->sta.ssid);
-		esp_err = nvs_get_blob(handle, "ssid", buff, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "ssid", buff, &sz);
 		if(esp_err != ESP_OK){
 			free(buff);
 			return false;
@@ -339,7 +328,7 @@ bool wifi_manager_fetch_wifi_sta_config(){
 
 		/* password */
 		sz = sizeof(wifi_manager_config_sta->sta.password);
-		esp_err = nvs_get_blob(handle, "password", buff, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "password", buff, &sz);
 		if(esp_err != ESP_OK){
 			free(buff);
 			return false;
@@ -351,7 +340,7 @@ bool wifi_manager_fetch_wifi_sta_config(){
 		/* user */
 		// sz = sizeof(registered_user);
 		sz = MAX_USER_SIZE;
-		esp_err = nvs_get_blob(handle, "user", buff, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "user", buff, &sz);
 		if(esp_err != ESP_OK){
 			ESP_LOGI(TAG, "esp_err: %x",esp_err);
 			free(buff);
@@ -363,7 +352,7 @@ bool wifi_manager_fetch_wifi_sta_config(){
 
 		/* settings */
 		sz = sizeof(wifi_settings);
-		esp_err = nvs_get_blob(handle, "settings", buff, &sz);
+		esp_err = nvs_get_blob(my_nvs_handle, "settings", buff, &sz);
 		if(esp_err != ESP_OK){
 			free(buff);
 			return false;
@@ -371,7 +360,7 @@ bool wifi_manager_fetch_wifi_sta_config(){
 		memcpy(&wifi_settings, buff, sz);
 
 		free(buff);
-		nvs_close(handle);
+		nvs_close(my_nvs_handle);
 
 		ESP_LOGI(TAG, "wifi_manager_fetch_wifi_sta_config: ssid:%s password:%s, user:%s",wifi_manager_config_sta->sta.ssid,wifi_manager_config_sta->sta.password, registered_user);
 		ESP_LOGD(TAG, "wifi_manager_fetch_wifi_settings: SoftAP_ssid:%s",wifi_settings.ap_ssid);
@@ -389,14 +378,12 @@ bool wifi_manager_fetch_wifi_sta_config(){
 	else{
 		return false;
 	}
-
+#endif
 }
-
 
 void wifi_manager_clear_ip_info_json(){
 	strcpy(ip_info_json, "{}\n");
 }
-
 
 void wifi_manager_generate_ip_info_json(update_reason_code_t update_reason_code){
 
@@ -449,10 +436,10 @@ void wifi_manager_generate_ip_info_json(update_reason_code_t update_reason_code)
 
 }
 
-
 void wifi_manager_clear_access_points_json(){
 	strcpy(accessp_json, "[]\n");
 }
+
 void wifi_manager_generate_acess_points_json(){
 
 	strcpy(accessp_json, "[");
@@ -497,6 +484,7 @@ bool wifi_manager_lock_sta_ip_string(TickType_t xTicksToWait){
 	}
 
 }
+
 void wifi_manager_unlock_sta_ip_string(){
 	xSemaphoreGive( wifi_manager_sta_ip_mutex );
 }
@@ -542,6 +530,7 @@ bool wifi_manager_lock_json_buffer(TickType_t xTicksToWait){
 	}
 
 }
+
 void wifi_manager_unlock_json_buffer(){
 	xSemaphoreGive( wifi_manager_json_mutex );
 }
@@ -579,7 +568,8 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 		 */
 		case WIFI_EVENT_SCAN_DONE:
 			ESP_LOGD(TAG, "WIFI_EVENT_SCAN_DONE");
-	    	xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_SCAN_BIT);
+	    	xEventGroupClearBits(dighub_event_group, SCAN_BIT);
+	    	xEventGroupSetBits(dighub_event_group, SCAN_DONE_BIT);
 			wifi_event_sta_scan_done_t event_sta_scan_done = *((wifi_event_sta_scan_done_t*)event_data);
 	    	wifi_manager_send_message(WM_EVENT_SCAN_DONE, &event_sta_scan_done);
 			break;
@@ -658,7 +648,7 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 			wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*)event_data;
 
 			/* if a DISCONNECT message is posted while a scan is in progress this scan will NEVER end, causing scan to never work again. For this reason SCAN_BIT is cleared too */
-			xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_WIFI_CONNECTED_BIT | WIFI_MANAGER_SCAN_BIT);
+			xEventGroupClearBits(dighub_event_group, WIFI_CONNECTED_BIT | SCAN_BIT);
 
 			/* post disconnect event with reason code */
 			wifi_manager_send_message(WM_EVENT_STA_DISCONNECTED, (void*)( (uint32_t) event->reason) );
@@ -673,12 +663,12 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 
 		case WIFI_EVENT_AP_START:
 			ESP_LOGI(TAG, "WIFI_EVENT_AP_START");
-			xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_AP_STARTED_BIT);
+			xEventGroupSetBits(dighub_event_group, AP_STARTED_BIT);
 			break;
 
 		case WIFI_EVENT_AP_STOP:
 			ESP_LOGI(TAG, "WIFI_EVENT_AP_STOP");
-			xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_AP_STARTED_BIT);
+			xEventGroupClearBits(dighub_event_group, AP_STARTED_BIT);
 			break;
 
 		/* Every time a station is connected to ESP32 AP, the <WIFI_EVENT_AP_STACONNECTED> will arise. Upon receiving this
@@ -723,7 +713,8 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 		 * the application when the IPV4 changes to a valid one. */
 		case IP_EVENT_STA_GOT_IP:
 			ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP");
-	        xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_WIFI_CONNECTED_BIT);
+			xEventGroupSetBits(dighub_event_group, WIFI_CONNECTED_BIT);
+			xEventGroupClearBits(dighub_event_group, WIFI_DISCONNECTED_BIT);
 	        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
 	        wifi_manager_send_message(WM_EVENT_STA_GOT_IP, (void*)event->ip_info.ip.addr);
 			break;
@@ -797,8 +788,8 @@ void wifi_manager_destroy(){
 	wifi_manager_json_mutex = NULL;
 	vSemaphoreDelete(wifi_manager_sta_ip_mutex);
 	wifi_manager_sta_ip_mutex = NULL;
-	vEventGroupDelete(wifi_manager_event_group);
-	wifi_manager_event_group = NULL;
+	vEventGroupDelete(dighub_event_group);
+	dighub_event_group = NULL;
 	vQueueDelete(wifi_manager_queue);
 	wifi_manager_queue = NULL;
 
@@ -890,6 +881,7 @@ void wifi_manager( void * pvParameters ){
 	BaseType_t xStatus;
 	EventBits_t uxBits;
 	uint8_t	retries = 0;
+    size_t stored_apname_req_size; // required size = length + 1
 
 	/* initialize the tcp stack */
 	ESP_ERROR_CHECK(esp_netif_init());
@@ -933,6 +925,13 @@ void wifi_manager( void * pvParameters ){
 		memcpy(ap_config.ap.password, wifi_settings.ap_pwd, sizeof(wifi_settings.ap_pwd));
 	}
 	
+    esp_err_t stored_apname_err = nvs_get_str(my_nvs_handle, "apname", NULL, &stored_apname_req_size);
+    if (stored_apname_err == ESP_OK)
+    {
+        stored_apname_err = nvs_get_str(my_nvs_handle, "apname", (char *)ap_config.ap.ssid, &stored_apname_req_size);
+		ESP_LOGI(TAG,"Encontré AP_NAME en memoria NVS: %s", ap_config.ap.ssid);
+    }
+
 	/* DHCP AP configuration */
 	esp_netif_dhcps_stop(esp_netif_ap); /* DHCP client/server must be stopped before setting new IP information. */
 	esp_netif_ip_info_t ap_ip_info;
@@ -1001,10 +1000,10 @@ void wifi_manager( void * pvParameters ){
 			case WM_ORDER_START_WIFI_SCAN:
 				ESP_LOGD(TAG, "MESSAGE: ORDER_START_WIFI_SCAN");
 
-				/* if a scan is already in progress this message is simply ignored thanks to the WIFI_MANAGER_SCAN_BIT uxBit */
-				uxBits = xEventGroupGetBits(wifi_manager_event_group);
-				if(! (uxBits & WIFI_MANAGER_SCAN_BIT) ){
-					xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_SCAN_BIT);
+				/* if a scan is already in progress this message is simply ignored thanks to the SCAN_BIT uxBit */
+				uxBits = xEventGroupGetBits(dighub_event_group);
+				if(! (uxBits & SCAN_BIT) ){
+					xEventGroupSetBits(dighub_event_group, SCAN_BIT);
 					ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, false));
 				}
 
@@ -1038,20 +1037,20 @@ void wifi_manager( void * pvParameters ){
 				 * by the wifi_manager.
 				 * */
 				if((BaseType_t)msg.param == CONNECTION_REQUEST_USER) {
-					xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_STA_CONNECT_BIT);
+					xEventGroupSetBits(dighub_event_group, REQUEST_STA_CONNECT_BIT);
 				}
 				else if((BaseType_t)msg.param == CONNECTION_REQUEST_RESTORE_CONNECTION) {
-					xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_RESTORE_STA_BIT);
+					xEventGroupSetBits(dighub_event_group, REQUEST_RESTORE_STA_BIT);
 				}
 
-				uxBits = xEventGroupGetBits(wifi_manager_event_group);
-				if( ! (uxBits & WIFI_MANAGER_WIFI_CONNECTED_BIT) ){
+				uxBits = xEventGroupGetBits(dighub_event_group);
+				if( ! (uxBits & WIFI_CONNECTED_BIT) ){
 					/* update config to latest and attempt connection */
 					ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, wifi_manager_get_wifi_sta_config()));
 
 					/* if there is a wifi scan in progress abort it first
 					   Calling esp_wifi_scan_stop will trigger a SCAN_DONE event which will reset this bit */
-					if(uxBits & WIFI_MANAGER_SCAN_BIT){
+					if(uxBits & SCAN_BIT){
 						esp_wifi_scan_stop();
 					}
 					ESP_ERROR_CHECK(esp_wifi_connect());
@@ -1125,11 +1124,11 @@ void wifi_manager( void * pvParameters ){
 					xTimerStop( wifi_manager_shutdown_ap_timer, (TickType_t)0 );
 				}
 
-				uxBits = xEventGroupGetBits(wifi_manager_event_group);
-				if( uxBits & WIFI_MANAGER_REQUEST_STA_CONNECT_BIT ){
+				uxBits = xEventGroupGetBits(dighub_event_group);
+				if( uxBits & REQUEST_STA_CONNECT_BIT ){
 					/* there are no retries when it's a user requested connection by design. This avoids a user hanging too much
 					 * in case they typed a wrong password for instance. Here we simply clear the request bit and move on */
-					xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_STA_CONNECT_BIT);
+					xEventGroupClearBits(dighub_event_group, REQUEST_STA_CONNECT_BIT);
 
 					if(wifi_manager_lock_json_buffer( portMAX_DELAY )){
 						wifi_manager_generate_ip_info_json( UPDATE_FAILED_ATTEMPT );
@@ -1137,9 +1136,9 @@ void wifi_manager( void * pvParameters ){
 					}
 
 				}
-				else if (uxBits & WIFI_MANAGER_REQUEST_DISCONNECT_BIT){
+				else if (uxBits & REQUEST_DISCONNECT_BIT){
 					/* user manually requested a disconnect so the lost connection is a normal event. Clear the flag and restart the AP */
-					xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_DISCONNECT_BIT);
+					xEventGroupClearBits(dighub_event_group, REQUEST_DISCONNECT_BIT);
 
 					/* erase configuration */
 					if(wifi_manager_config_sta){
@@ -1172,10 +1171,10 @@ void wifi_manager( void * pvParameters ){
 					xTimerStart( wifi_manager_retry_timer, (TickType_t)0 );
 
 					/* if it was a restore attempt connection, we clear the bit */
-					xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_RESTORE_STA_BIT);
+					xEventGroupClearBits(dighub_event_group, REQUEST_RESTORE_STA_BIT);
 
 					/* if the AP is not started, we check if we have reached the threshold of failed attempt to start it */
-					if(! (uxBits & WIFI_MANAGER_AP_STARTED_BIT) ){
+					if(! (uxBits & AP_STARTED_BIT) ){
 
 						/* if the nunber of retries is below the threshold to start the AP, a reconnection attempt is made
 						 * This way we avoid restarting the AP directly in case the connection is mementarily lost */
@@ -1218,12 +1217,12 @@ void wifi_manager( void * pvParameters ){
 				ESP_LOGI(TAG, "MESSAGE: ORDER_STOP_AP");
 
 
-				uxBits = xEventGroupGetBits(wifi_manager_event_group);
+				uxBits = xEventGroupGetBits(dighub_event_group);
 
 				/* before stopping the AP, we check that we are still connected. There's a chance that once the timer
 				 * kicks in, for whatever reason the esp32 is already disconnected.
 				 */
-				if(uxBits & WIFI_MANAGER_WIFI_CONNECTED_BIT){
+				if(uxBits & WIFI_CONNECTED_BIT){
 
 					/* set to STA only */
 					esp_wifi_set_mode(WIFI_MODE_STA);
@@ -1244,17 +1243,17 @@ void wifi_manager( void * pvParameters ){
 			case WM_EVENT_STA_GOT_IP:
 				ESP_LOGI(TAG, "MESSAGE: EVENT_STA_GOT_IP");
 
-				uxBits = xEventGroupGetBits(wifi_manager_event_group);
+				uxBits = xEventGroupGetBits(dighub_event_group);
 
 				/* reset connection requests bits -- doesn't matter if it was set or not */
-				xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_STA_CONNECT_BIT);
+				xEventGroupClearBits(dighub_event_group, REQUEST_STA_CONNECT_BIT);
 
 				/* save IP as a string for the HTTP server host */
 				wifi_manager_safe_update_sta_ip_string((uint32_t)msg.param);
 
 				/* save wifi config in NVS if it wasn't a restored of a connection */
-				if(uxBits & WIFI_MANAGER_REQUEST_RESTORE_STA_BIT){
-					xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_RESTORE_STA_BIT);
+				if(uxBits & REQUEST_RESTORE_STA_BIT){
+					xEventGroupClearBits(dighub_event_group, REQUEST_RESTORE_STA_BIT);
 				}
 				else{
 					wifi_manager_save_sta_config();
@@ -1278,7 +1277,7 @@ void wifi_manager( void * pvParameters ){
 				 * We check first that it's actually running because in case of a boot and restore connection
 				 * the AP is not even started to begin with.
 				 */
-				if(uxBits & WIFI_MANAGER_AP_STARTED_BIT){
+				if(uxBits & AP_STARTED_BIT){
 					TickType_t t = pdMS_TO_TICKS( WIFI_MANAGER_SHUTDOWN_AP_TIMER );
 
 					/* if for whatever reason user configured the shutdown timer to be less than 1 tick, the AP is stopped straight away */
@@ -1300,7 +1299,7 @@ void wifi_manager( void * pvParameters ){
 				ESP_LOGI(TAG, "MESSAGE: ORDER_DISCONNECT_STA");
 
 				/* precise this is coming from a user request */
-				xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_DISCONNECT_BIT);
+				xEventGroupSetBits(dighub_event_group, REQUEST_DISCONNECT_BIT);
 
 				/* order wifi discconect */
 				ESP_ERROR_CHECK(esp_wifi_disconnect());

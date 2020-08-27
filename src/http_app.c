@@ -42,6 +42,7 @@ function to process requests, decode URLs, serve files, etc. etc.
 #include <esp_system.h>
 #include "esp_netif.h"
 #include <esp_http_server.h>
+#include "freertos/event_groups.h"
 
 #include "wifi_manager.h"
 #include "http_app.h"

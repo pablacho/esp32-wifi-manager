@@ -415,6 +415,35 @@ void wifi_manager_set_callback(message_code_t message_code, void (*func_ptr)(voi
 BaseType_t wifi_manager_send_message(message_code_t code, void *param);
 BaseType_t wifi_manager_send_message_to_front(message_code_t code, void *param);
 
+/* @brief indicate that the ESP32 is currently connected. */
+static const int WIFI_CONNECTED_BIT = BIT0;
+static const int AP_STA_CONNECTED_BIT = BIT1;
+/* @brief Set automatically once the SoftAP is started */
+static const int AP_STARTED_BIT = BIT2;
+/* @brief When set, means a client requested to connect to an access point.*/
+static const int REQUEST_STA_CONNECT_BIT = BIT3;
+/* @brief This bit is set automatically as soon as a connection was lost */
+static const int STA_DISCONNECT_BIT = BIT4;
+/* @brief When set, means the wifi manager attempts to restore a previously saved connection at startup. */
+static const int REQUEST_RESTORE_STA_BIT = BIT5;
+/* @brief When set, means a client requested to disconnect from currently connected AP. */
+static const int REQUEST_WIFI_DISCONNECT_BIT = BIT6;
+/* @brief When set, means a scan is in progress */
+static const int SCAN_BIT = BIT7;
+/* @brief When set, means user requested for a disconnect */
+static const int REQUEST_DISCONNECT_BIT = BIT8;
+
+// Event group
+static const int WIFI_DISCONNECTED_BIT = BIT9;
+static const int SCAN_DONE_BIT = BIT10;
+static const int FACTORY_INITIALIZATION_FINISHED_BIT = BIT11;
+static const int CHECK_OTA_FINISHED_BIT = BIT12;
+static const int MQTT_CONNECTED_BIT = BIT13;
+static const int MQTT_DISCONNECTED_BIT = BIT14;
+
+extern EventGroupHandle_t dighub_event_group;
+extern bool dighub_event_group_init;
+
 #ifdef __cplusplus
 }
 #endif
