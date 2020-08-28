@@ -881,7 +881,6 @@ void wifi_manager( void * pvParameters ){
 	BaseType_t xStatus;
 	EventBits_t uxBits;
 	uint8_t	retries = 0;
-    size_t stored_apname_req_size; // required size = length + 1
 
 	/* initialize the tcp stack */
 	ESP_ERROR_CHECK(esp_netif_init());
@@ -903,7 +902,9 @@ void wifi_manager( void * pvParameters ){
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_manager_event_handler, NULL,&instance_wifi_event));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &wifi_manager_event_handler, NULL,&instance_ip_event));
 
-	/* Let prefactory_task know I already loaded the wifi module */
+    esp_wifi_get_mac(ESP_IF_WIFI_STA, mac);
+
+	/* Let prefactory_task know I already got the mac address */
 	xEventGroupSetBits(dighub_event_group, WIFI_MODULE_INIT);					
 
 #ifdef PREFACTORY
@@ -921,6 +922,8 @@ void wifi_manager( void * pvParameters ){
 			.beacon_interval = DEFAULT_AP_BEACON_INTERVAL,
 		},
 	};
+
+	sprintf((char *) wifi_settings.ap_ssid, "DIG-%02X%02X", mac[4], mac[5]);
 	memcpy(ap_config.ap.ssid, wifi_settings.ap_ssid , sizeof(wifi_settings.ap_ssid));
 
 	/* if the password lenght is under 8 char which is the minium for WPA2, the access point starts as open */
@@ -933,14 +936,7 @@ void wifi_manager( void * pvParameters ){
 		memcpy(ap_config.ap.password, wifi_settings.ap_pwd, sizeof(wifi_settings.ap_pwd));
 	}
 	
-    esp_err_t stored_apname_err = nvs_get_str(my_nvs_handle, "apname", NULL, &stored_apname_req_size);
-    if (stored_apname_err == ESP_OK)
-    {
-        stored_apname_err = nvs_get_str(my_nvs_handle, "apname", (char *)ap_config.ap.ssid, &stored_apname_req_size);
-		ESP_LOGI(TAG,"Found AP_NAME in NVS memory: %s", ap_config.ap.ssid);
-    }
-	else
-		ESP_LOGE(TAG,"AP_NAME not found, using default: %s", ap_config.ap.ssid);
+	ESP_LOGI(TAG, "Internal AP parameters SSID: %s and PWD: %s", ap_config.ap.ssid, ap_config.ap.password);
 
 	/* DHCP AP configuration */
 	esp_netif_dhcps_stop(esp_netif_ap); /* DHCP client/server must be stopped before setting new IP information. */

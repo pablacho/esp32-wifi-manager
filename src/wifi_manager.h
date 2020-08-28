@@ -442,8 +442,9 @@ static const int MQTT_CONNECTED_BIT = BIT13;
 static const int MQTT_DISCONNECTED_BIT = BIT14;
 static const int WIFI_MODULE_INIT = BIT15;
 
-extern EventGroupHandle_t dighub_event_group;
-extern bool dighub_event_group_init;
+EventGroupHandle_t dighub_event_group;
+uint8_t mac[6];
+
 
 #ifdef __cplusplus
 }
