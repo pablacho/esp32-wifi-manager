@@ -54,7 +54,7 @@ Contains the freeRTOS task and all necessary support
 #include "lwip/netdb.h"
 #include "lwip/ip4_addr.h"
 
-
+#include "../../main/main.h"
 #include "json.h"
 #include "dns_server.h"
 #include "wifi_manager.h"
@@ -903,6 +903,14 @@ void wifi_manager( void * pvParameters ){
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_manager_event_handler, NULL,&instance_wifi_event));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &wifi_manager_event_handler, NULL,&instance_ip_event));
 
+	/* Let prefactory_task know I already loaded the wifi module */
+	xEventGroupSetBits(dighub_event_group, WIFI_MODULE_INIT);					
+
+#ifdef PREFACTORY
+	/* Wait for prefactory_task to finish loading everything on nvs */
+    xEventGroupWaitBits(dighub_event_group, FACTORY_INITIALIZATION_FINISHED_BIT, false, true, 5000 / portTICK_PERIOD_MS);
+#endif
+
 	/* SoftAP - Wifi Access Point configuration setup */
 	wifi_config_t ap_config = {
 		.ap = {
@@ -929,8 +937,10 @@ void wifi_manager( void * pvParameters ){
     if (stored_apname_err == ESP_OK)
     {
         stored_apname_err = nvs_get_str(my_nvs_handle, "apname", (char *)ap_config.ap.ssid, &stored_apname_req_size);
-		ESP_LOGI(TAG,"Encontré AP_NAME en memoria NVS: %s", ap_config.ap.ssid);
+		ESP_LOGI(TAG,"Found AP_NAME in NVS memory: %s", ap_config.ap.ssid);
     }
+	else
+		ESP_LOGE(TAG,"AP_NAME not found, using default: %s", ap_config.ap.ssid);
 
 	/* DHCP AP configuration */
 	esp_netif_dhcps_stop(esp_netif_ap); /* DHCP client/server must be stopped before setting new IP information. */
