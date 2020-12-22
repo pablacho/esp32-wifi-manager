@@ -323,7 +323,8 @@ bool wifi_manager_fetch_wifi_sta_config();
 
 wifi_config_t* wifi_manager_get_wifi_sta_config();
 char* wifi_manager_get_usr_config();
-
+char* wifi_manager_get_ap_ssid();
+int wifi_manager_get_ap_rssi();
 
 /**
  * @brief requests a connection to an access point that will be process in the main task thread.

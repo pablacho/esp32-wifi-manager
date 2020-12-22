@@ -58,6 +58,7 @@ Contains the freeRTOS task and all necessary support
 #include "json.h"
 #include "dns_server.h"
 #include "wifi_manager.h"
+#include "../../main/oled.h"
 
 
 
@@ -81,6 +82,7 @@ char *accessp_json = NULL;
 char *ip_info_json = NULL;
 wifi_config_t* wifi_manager_config_sta = NULL;
 char *registered_user = NULL;
+char conn_ap_ssid[MAX_SSID_SIZE + 1];
 
 /* @brief Array of callback function pointers */
 void (**cb_ptr_arr)(void*) = NULL;
@@ -426,7 +428,8 @@ void wifi_manager_generate_ip_info_json(update_reason_code_t update_reason_code)
 								"0",
 								"0",
 								"0",
-								(int)update_reason_code);
+								(int)update_reason_code,
+								"0");
 		}
 	}
 	else{
@@ -745,7 +748,27 @@ wifi_config_t* wifi_manager_get_wifi_sta_config(){
 }
 
 char* wifi_manager_get_usr_config(){
+	/* returns the registered user stored in NVM
+	*/
 	return registered_user;
+}
+
+char* wifi_manager_get_ap_ssid() {
+	/* returns the connected network SSID
+	*/
+	sprintf(conn_ap_ssid, "%s", wifi_manager_config_sta->sta.ssid);
+
+	return conn_ap_ssid;
+}
+
+int wifi_manager_get_ap_rssi(){
+	/* returns the connected network RSSI
+	*/
+	wifi_ap_record_t wifidata;
+	if (esp_wifi_sta_get_ap_info(&wifidata)==0){
+		return wifidata.rssi;
+	}
+	return 127;		// invalid RSSI to indicate that there is an error
 }
 
 void wifi_manager_connect_async(){
@@ -973,7 +996,7 @@ void wifi_manager( void * pvParameters ){
 
 	/* main processing loop */
 	for(;;){
-		xStatus = xQueueReceive( wifi_manager_queue, &msg, portMAX_DELAY );
+		xStatus = xQueueReceive( wifi_manager_queue, &msg, 10000 / portTICK_PERIOD_MS);
 
 		if( xStatus == pdPASS ){
 			switch(msg.code){
@@ -1320,6 +1343,14 @@ void wifi_manager( void * pvParameters ){
 
 			} /* end of switch/case */
 		} /* end of if status=pdPASS */
+
+        char* status_msg = malloc(DISPLAY_CHAR_WIDTH + 1);
+        sprintf(status_msg, " ap: %s", wifi_manager_get_ap_ssid());
+        print_to_oled(status_msg);
+        sprintf(status_msg, " sig:%d m:%u", wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
+        print_to_oled(status_msg);
+        free(status_msg);
+
 	} /* end of for loop */
 
 	vTaskDelete( NULL );
