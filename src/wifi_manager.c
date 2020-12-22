@@ -1344,12 +1344,7 @@ void wifi_manager( void * pvParameters ){
 			} /* end of switch/case */
 		} /* end of if status=pdPASS */
 
-        char* status_msg = malloc(DISPLAY_CHAR_WIDTH + 1);
-        sprintf(status_msg, " ap: %s", wifi_manager_get_ap_ssid());
-        print_to_oled(status_msg);
-        sprintf(status_msg, " sig:%d m:%u", wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
-        print_to_oled(status_msg);
-        free(status_msg);
+		print_to_status(wifi_manager_get_ap_ssid(), wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
 
 	} /* end of for loop */
 
