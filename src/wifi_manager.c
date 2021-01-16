@@ -191,7 +191,7 @@ void wifi_manager_start(){
 	wifi_manager_shutdown_ap_timer = xTimerCreate( NULL, pdMS_TO_TICKS(WIFI_MANAGER_SHUTDOWN_AP_TIMER), pdFALSE, ( void * ) 0, wifi_manager_timer_shutdown_ap_cb);
 
 	/* start wifi manager task */
-	xTaskCreate(&wifi_manager, "wifi_manager", 4096, NULL, WIFI_MANAGER_TASK_PRIORITY, &task_wifi_manager);
+	xTaskCreate(&wifi_manager, "wifi_manager", 8192, NULL, WIFI_MANAGER_TASK_PRIORITY, &task_wifi_manager);
 }
 
 esp_err_t wifi_manager_save_sta_config(){
@@ -570,8 +570,8 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 			the Wi-Fi driver to free the internal memory which is allocated during the scan (do not forget to do this)!
 		 */
 		case WIFI_EVENT_SCAN_DONE:
-			ESP_LOGD(TAG, "WIFI_EVENT_SCAN_DONE");
-	    	xEventGroupClearBits(dighub_event_group, SCAN_BIT);
+			ESP_LOGI(TAG, "WIFI_EVENT_SCAN_DONE");
+	    	// xEventGroupClearBits(dighub_event_group, SCAN_BIT);
 	    	xEventGroupSetBits(dighub_event_group, SCAN_DONE_BIT);
 			wifi_event_sta_scan_done_t event_sta_scan_done = *((wifi_event_sta_scan_done_t*)event_data);
 	    	wifi_manager_send_message(WM_EVENT_SCAN_DONE, &event_sta_scan_done);
@@ -756,6 +756,7 @@ char* wifi_manager_get_usr_config(){
 char* wifi_manager_get_ap_ssid() {
 	/* returns the connected network SSID
 	*/
+	//TODO: transformar SSID a hexadecimal
 	sprintf(conn_ap_ssid, "%s", wifi_manager_config_sta->sta.ssid);
 
 	return conn_ap_ssid;
@@ -985,10 +986,12 @@ void wifi_manager( void * pvParameters ){
 
 	/* wifi scanner config */
 	wifi_scan_config_t scan_config = {
-		.ssid = 0,
-		.bssid = 0,
+		.ssid = NULL,
+		.bssid = NULL,
 		.channel = 0,
-		.show_hidden = true
+		.show_hidden = 1,
+		.scan_type = WIFI_SCAN_TYPE_PASSIVE,
+		.scan_time.passive = 300,		
 	};
 
 	/* enqueue first event: load previous config */
@@ -996,7 +999,8 @@ void wifi_manager( void * pvParameters ){
 
 	/* main processing loop */
 	for(;;){
-		xStatus = xQueueReceive( wifi_manager_queue, &msg, 10000 / portTICK_PERIOD_MS);
+		// xStatus = xQueueReceive( wifi_manager_queue, &msg, 10000 / portTICK_PERIOD_MS);
+		xStatus = xQueueReceive( wifi_manager_queue, &msg, portMAX_DELAY);
 
 		if( xStatus == pdPASS ){
 			switch(msg.code){
@@ -1027,12 +1031,19 @@ void wifi_manager( void * pvParameters ){
 				break;
 
 			case WM_ORDER_START_WIFI_SCAN:
-				ESP_LOGD(TAG, "MESSAGE: ORDER_START_WIFI_SCAN");
+				ESP_LOGI(TAG, "MESSAGE: ORDER_START_WIFI_SCAN");
 
 				/* if a scan is already in progress this message is simply ignored thanks to the SCAN_BIT uxBit */
 				uxBits = xEventGroupGetBits(dighub_event_group);
 				if(! (uxBits & SCAN_BIT) ){
 					xEventGroupSetBits(dighub_event_group, SCAN_BIT);
+					// ESP_LOGI(TAG, "scan_config ssid: %s", scan_config.ssid ? (char *) scan_config.ssid : "null");
+					// ESP_LOGI(TAG, "scan_config bssid: %s", scan_config.bssid ? (char *) scan_config.bssid : "null");
+					// ESP_LOGI(TAG, "scan_config channel: %d", scan_config.channel);
+					// ESP_LOGI(TAG, "scan_config hidden: %d", scan_config.show_hidden);
+					// ESP_LOGI(TAG, "scan_config type: %d", scan_config.scan_type);
+					// ESP_LOGI(TAG, "scan_config scan time: %d", scan_config.scan_time.passive);
+					// ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, false));
 					ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, false));
 				}
 
@@ -1344,7 +1355,7 @@ void wifi_manager( void * pvParameters ){
 			} /* end of switch/case */
 		} /* end of if status=pdPASS */
 
-		print_to_status(wifi_manager_get_ap_ssid(), wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
+		// print_to_status(wifi_manager_get_ap_ssid(), wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
 
 	} /* end of for loop */
 
