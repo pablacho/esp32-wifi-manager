@@ -38,12 +38,12 @@ function stopRefreshAPInterval() {
   }
 }
 
-function startCheckStatusInterval() {
-  checkStatusInterval = setInterval(checkStatus, 950);
+function startCheckStatusInterval(time) {
+  checkStatusInterval = setInterval(checkStatus, time);
 }
 
-function startRefreshAPInterval() {
-  refreshAPInterval = setInterval(refreshAP, 3800);
+function startRefreshAPInterval(time) {
+  refreshAPInterval = setInterval(refreshAP, time);
 }
 
 docReady(async function () {
@@ -156,7 +156,7 @@ docReady(async function () {
       body: { timestamp: Date.now() },
     });
 
-    startCheckStatusInterval();
+    startCheckStatusInterval(5000);
 
     connect_details_div.style.display = "none";
     wifi_div.style.display = "block";
@@ -164,8 +164,8 @@ docReady(async function () {
 
   //first time the page loads: attempt get the connection status and start the wifi scan
   await refreshAP();
-  startCheckStatusInterval();
-  startRefreshAPInterval();
+  startCheckStatusInterval(5000);
+  startRefreshAPInterval(10000);
 });
 
 async function performConnect(conntype) {
@@ -210,8 +210,8 @@ async function performConnect(conntype) {
   });
 
   //now we can re-set the intervals regardless of result
-  startCheckStatusInterval();
-  startRefreshAPInterval();
+  startCheckStatusInterval(5000);
+  startRefreshAPInterval(10000);
 }
 
 function rssiToIcon(rssi) {

@@ -571,7 +571,7 @@ static void wifi_manager_event_handler(void* arg, esp_event_base_t event_base, i
 		 */
 		case WIFI_EVENT_SCAN_DONE:
 			ESP_LOGI(TAG, "WIFI_EVENT_SCAN_DONE");
-	    	// xEventGroupClearBits(dighub_event_group, SCAN_BIT);
+	    	xEventGroupClearBits(dighub_event_group, SCAN_BIT);
 	    	xEventGroupSetBits(dighub_event_group, SCAN_DONE_BIT);
 			wifi_event_sta_scan_done_t event_sta_scan_done = *((wifi_event_sta_scan_done_t*)event_data);
 	    	wifi_manager_send_message(WM_EVENT_SCAN_DONE, &event_sta_scan_done);
@@ -999,8 +999,8 @@ void wifi_manager( void * pvParameters ){
 
 	/* main processing loop */
 	for(;;){
-		// xStatus = xQueueReceive( wifi_manager_queue, &msg, 10000 / portTICK_PERIOD_MS);
-		xStatus = xQueueReceive( wifi_manager_queue, &msg, portMAX_DELAY);
+		xStatus = xQueueReceive( wifi_manager_queue, &msg, 10000 / portTICK_PERIOD_MS);
+		// xStatus = xQueueReceive( wifi_manager_queue, &msg, portMAX_DELAY);
 
 		if( xStatus == pdPASS ){
 			switch(msg.code){
@@ -1355,7 +1355,7 @@ void wifi_manager( void * pvParameters ){
 			} /* end of switch/case */
 		} /* end of if status=pdPASS */
 
-		// print_to_status(wifi_manager_get_ap_ssid(), wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
+		print_to_status(wifi_manager_get_ap_ssid(), wifi_manager_get_ap_rssi(), esp_get_free_heap_size());
 
 	} /* end of for loop */
 
